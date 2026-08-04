@@ -1,0 +1,23 @@
+{
+  "name": "cypress-ai-skill-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huyho09/cypress-ai-skill-demo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/huyho09/cypress-ai-skill-demo/issues"
+  },
+  "homepage": "https://github.com/huyho09/cypress-ai-skill-demo#readme",
+  "devDependencies": {
+    "cypress": "^15.19.0"
+  }
+}
