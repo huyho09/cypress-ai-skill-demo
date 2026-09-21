@@ -45,7 +45,7 @@ describe("Login", () => {
     cy.visit("/login");
   });
 
-  it("submits valid credentials → lands on the dashboard with account info in the header", () => {
+  it("SUR-1-TC-01 — Valid credentials land on the dashboard with account info in the header", () => {
     cy.get("@credentials").then(({ TEST_USER, TEST_PASS }) => {
       // Fail with a clear message instead of typing `undefined` into the form.
       expect(TEST_USER, "TEST_USER env var").to.be.a("string").and.not.be.empty;
@@ -62,8 +62,12 @@ describe("Login", () => {
     });
 
     // The button stays disabled until both fields validate, so let the
-    // assertion retry rather than clicking into a disabled control.
-    cy.get(LOGIN_BUTTON).find("button").should("be.enabled").click();
+    // assertion retry rather than clicking into a disabled control. The
+    // disabled state lives on the native <button> inside the shadow root, but
+    // that element has no box of its own — <ion-button> is what the user sees
+    // and clicks, so assert on the inner control and click the host.
+    cy.get(LOGIN_BUTTON).find("button").should("be.enabled");
+    cy.get(LOGIN_BUTTON).click();
 
     cy.wait("@loginRequest").its("response.statusCode").should("eq", 200);
 

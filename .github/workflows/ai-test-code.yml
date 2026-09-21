@@ -1,0 +1,88 @@
+# Pipeline stage 4-5: approved test cases -> Cypress spec -> execution.
+#
+# Approving the review pull request is the trigger. The approved markdown in
+# that branch is the input, so a reviewer's edits are what gets built — not the
+# original ticket, and not the model's first draft.
+name: AI · Test code from approved cases
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate:
+    # Only an approval, and only on a branch this pipeline opened.
+    if: >-
+      github.event.review.state == 'approved' &&
+      contains(github.event.pull_request.labels.*.name, 'ai-test-cases') &&
+      startsWith(github.event.pull_request.head.ref, 'ai/test-cases/')
+    runs-on: ubuntu-latest
+    outputs:
+      ticket: ${{ steps.ticket.outputs.ticket }}
+      changed: ${{ steps.commit.outputs.changed }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm install -g @anthropic-ai/claude-code
+
+      - name: Resolve the ticket
+        id: ticket
+        run: |
+          set -euo pipefail
+          TICKET="$(printf '%s' "${{ github.event.pull_request.head.ref }}" | sed -n 's#^ai/test-cases/##p')"
+          if [ -z "$TICKET" ]; then
+            echo "Could not read a ticket key from the branch name." >&2
+            exit 1
+          fi
+          echo "ticket=$TICKET" >> "$GITHUB_OUTPUT"
+
+      - name: Generate the spec
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash scripts/ai-test-code.sh "${{ steps.ticket.outputs.ticket }}"
+
+      - name: Commit
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cypress/
+
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The spec already matches the approved test cases."
+            exit 0
+          fi
+
+          git commit -m "test(${{ steps.ticket.outputs.ticket }}): automate the approved test cases"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  # A push made with GITHUB_TOKEN does not start another workflow, so the run
+  # stage is called directly rather than left to the pull_request trigger.
+  verify:
+    needs: generate
+    uses: ./.github/workflows/cypress-run.yml
+    with:
+      ticket: ${{ needs.generate.outputs.ticket }}
+      pr: ${{ format('{0}', github.event.pull_request.number) }}
+      ref: ${{ github.event.pull_request.head.ref }}
+    secrets:
+      CYPRESS_TEST_USER: ${{ secrets.CYPRESS_TEST_USER }}
+      CYPRESS_TEST_PASS: ${{ secrets.CYPRESS_TEST_PASS }}

@@ -1,0 +1,14 @@
+{
+  "key": "SUR-1",
+  "url": "https://example.atlassian.net/browse/SUR-1",
+  "summary": "Member login with email and password",
+  "issueType": "Story",
+  "status": "Ready for QA",
+  "priority": "High",
+  "labels": ["auth", "web"],
+  "components": ["Login"],
+  "description": "As a Surveyz member I want to sign in with my email address and password so that I can reach my dashboard and see my reward balance.\n\nThe login form has an email field, a password field, and a Login button. Field validation runs on blur. The service is only available to members in Australia; traffic from elsewhere is blocked by a modal that cannot be dismissed.",
+  "acceptanceCriteria": "- Given valid credentials, submitting the form signs the member in and lands them on the dashboard home page.\n- The dashboard header greets the signed-in member by first name and shows their reward balance.\n- Given an incorrect password, the member stays on the login page and sees an error that does not reveal whether the email address is registered.\n- The Login button stays disabled until both the email and the password field hold valid values.\n- The password field masks its value.\n- Members outside Australia see the geo-restriction modal instead of the dashboard.",
+  "fetchedAt": "2026-09-17T00:00:00.000Z",
+  "_note": "Example snapshot, hand-written so the pipeline can be demoed without Jira credentials. scripts/jira-fetch.js overwrites this file with real data once JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN are set."
+}

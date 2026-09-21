@@ -144,3 +144,11 @@ vite.config.ts.timestamp-*
 
 # Cypress login files
 cypress.env.json
+
+# Cypress run artifacts
+cypress/screenshots/
+cypress/videos/
+
+# Pipeline working files: ticket snapshots and test-case docs are committed,
+# run results are not.
+.ai/results/

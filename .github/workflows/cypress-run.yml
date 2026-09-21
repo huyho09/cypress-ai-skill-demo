@@ -1,0 +1,119 @@
+# Pipeline stage 6-7: run the specs, report each result against its test case.
+#
+# Callable three ways: by the automation stage right after it pushes a spec, by
+# any push to a review branch, and by hand. The reporting step is what makes the
+# run meaningful — a bare pass count says nothing about whether the ticket's
+# acceptance criteria are covered.
+name: Cypress · Run and report
+
+on:
+  workflow_call:
+    inputs:
+      ticket:
+        required: true
+        type: string
+      pr:
+        description: Pull request number to comment on
+        required: false
+        type: string
+      ref:
+        description: Branch to check out; defaults to the triggering ref
+        required: false
+        type: string
+    secrets:
+      CYPRESS_TEST_USER:
+        required: true
+      CYPRESS_TEST_PASS:
+        required: true
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ticket:
+        description: Jira issue key, e.g. SUR-1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The caller has just pushed the generated spec, so check out the
+          # branch head rather than the commit that started the run.
+          ref: ${{ inputs.ref || github.head_ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npx cypress install
+
+      # A pull_request run knows its ticket only from the branch name, which is
+      # the convention the test-case stage creates: ai/test-cases/<TICKET>.
+      - name: Resolve the ticket
+        id: ticket
+        run: |
+          set -euo pipefail
+          TICKET="${{ inputs.ticket }}"
+          if [ -z "$TICKET" ]; then
+            TICKET="$(printf '%s' "${{ github.head_ref }}" | sed -n 's#^ai/test-cases/##p')"
+          fi
+          echo "ticket=$TICKET" >> "$GITHUB_OUTPUT"
+
+          PR="${{ inputs.pr || github.event.pull_request.number }}"
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Run the specs
+        id: cypress
+        env:
+          CYPRESS_TEST_USER: ${{ secrets.CYPRESS_TEST_USER }}
+          CYPRESS_TEST_PASS: ${{ secrets.CYPRESS_TEST_PASS }}
+        run: npm test
+
+      # Runs even when the specs failed: a failing run is exactly when the
+      # per-test-case breakdown is worth reading.
+      - name: Report against the test cases
+        if: always() && steps.ticket.outputs.ticket != ''
+        run: |
+          set -euo pipefail
+          TICKET="${{ steps.ticket.outputs.ticket }}"
+          PR="${{ steps.ticket.outputs.pr }}"
+
+          if [ ! -f "test-cases/${TICKET}.md" ]; then
+            echo "No test cases for ${TICKET} — skipping the traceability report."
+            exit 0
+          fi
+
+          node scripts/report-results.js "$TICKET" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --body-file ".ai/results/${TICKET}-report.md"
+          fi
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-artifacts
+          path: |
+            cypress/screenshots
+            cypress/videos
+            .ai/results
+          if-no-files-found: ignore
+          retention-days: 7
